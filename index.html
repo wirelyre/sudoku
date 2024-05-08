@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<head>
+<title>Sudoku solver</title>
+<style type="text/css">
+  body {
+    display: grid;
+    justify-content: center;
+    grid-gap: 1em;
+    margin: 2em;
+  }
+
+  #grid { border-collapse: collapse; }
+  #grid colgroup, tbody { border: 3px solid #000; }
+  #grid td              { border: 1px solid #0003; }
+
+  #grid.impossible { background-color: #fee; }
+  #grid.impossible colgroup,
+  #grid.impossible tbody { border-color: #a00; }
+
+  #grid.unique { background-color: #efe; }
+  #grid.unique colgroup,
+  #grid.unique tbody { border-color: #040; }
+
+  .cell {
+    font-size: 15pt;
+    font-weight: bold;
+    width: 1.4em;
+    height: 1.4em;
+    padding: 0.1em;
+    border: none;
+    background-color: transparent;
+    text-align: center;
+  }
+  .cell::placeholder {
+    font-weight: normal;
+    color: #444;
+  }
+
+  #clear-container {
+    display: grid;
+    justify-content: center;
+  }
+</style>
+
+<body>
+
+<table id="grid">
+  <colgroup><col><col><col>
+  <colgroup><col><col><col>
+  <colgroup><col><col><col>
+
+  <script>
+  for (let box_row of [0, 1, 2]) {
+    document.write('<tbody>');
+    for (let row of [0, 1, 2]) {
+      document.write('<tr>');
+      for (let col of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+        let cell = 9 * (3 * box_row + row) + col;
+        document.write('<td>');
+        document.write('<input class="cell" type="text" inputmode="numeric" id="c' + cell + '">');
+      }
+    }
+    document.write('</tbody>');
+  }
+  </script>
+
+</table>
+
+<div id="clear-container">
+<button id="clear">Clear</button>
+</div>
+
+<script type="module">
+import init, {solve} from "./pkg/sudoku.js";
+
+let grid = document.getElementById('grid');
+
+function get(row, col) {
+  if (0 <= row && row < 9 && 0 <= col && col < 9)
+    return document.getElementById('c' + (9 * row + col));
+}
+
+function select(el, ev) {
+  if (el) {
+    el.focus();
+    el.setSelectionRange(0, el.value.length);
+  }
+  if (ev) ev.preventDefault();
+}
+
+function doSolve() {
+  // console.time('solving');
+  let clues = getGrid();
+  let solutions;
+  if (clues.filter(digit => digit > 0).length >= 3)
+    solutions = solve(clues, 2);  // ask for 2 solutions to see if it's unique
+  // console.timeEnd('solving');
+
+  setPlaceholders(solutions ? solutions[0] : null);
+
+  if (solutions && solutions.length == 0)
+    grid.classList = 'impossible';
+  else if (solutions && solutions.length == 1)
+    grid.classList = 'unique';
+  else
+    grid.classList = '';
+}
+
+function getGrid() {
+  let arr = [];
+  for (let row of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+    for (let col of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+      let value = get(row, col).value;
+
+      if (value.match(/^[1-9]$/))
+        arr.push(parseInt(value, 10));
+      else
+        arr.push(0);
+    }
+  }
+  return arr;
+}
+
+function setPlaceholders(arr) {
+  for (let row of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+    for (let col of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+      get(row, col).placeholder = arr ? arr[9 * row + col] : '';
+    }
+  }
+}
+
+async function main() {
+  await init();
+
+  document.getElementById('clear').addEventListener('click', () => {
+    for (let row of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+      for (let col of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+        get(row, col).value = '';
+      }
+    }
+    doSolve();
+  });
+
+  for (let row of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+    for (let col of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+      let el = get(row, col);
+
+      let prev = (col > 0) ? get(row, col - 1) : get(row - 1, 8);
+      let next = (col < 8) ? get(row, col + 1) : get(row + 1, 0);
+      let up   = get(row - 1, col);
+      let down = get(row + 1, col);
+
+      el.addEventListener('focus', () => select(el));
+      el.addEventListener('input', () => {
+        if (el.value.match(/^[ 0-9]$/)) select(next);
+        if (!el.value.match(/^[1-9]$/)) el.value = '';
+        doSolve();
+      });
+
+      el.addEventListener('keydown', (ev) => {
+        if      (ev.key == 'ArrowUp')    select(up,   ev);
+        else if (ev.key == 'ArrowLeft')  select(prev, ev);
+        else if (ev.key == 'ArrowRight') select(next, ev);
+        else if (ev.key == 'ArrowDown')  select(down, ev);
+
+        else if (ev.key == 'Backspace' && el.value == '' && prev) {
+          prev.value = '';
+          select(prev, ev);
+          doSolve();
+        }
+      });
+    }
+  }
+
+  doSolve();
+}
+
+main();
+</script>
